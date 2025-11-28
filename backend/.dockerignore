@@ -1,0 +1,29 @@
+# Build artifacts
+target/
+
+# IDE files 
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git files
+.git/
+.gitignore
+
+# Documentation
+*.md
+
+# CI/CD
+.github/
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
