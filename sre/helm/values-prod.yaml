@@ -14,7 +14,7 @@ aws:
 # Image configuration
 image:
   repository: interview # ECR repository name
-  tag: prod-c317891-5590
+  tag: prod-0da4a16-c873
   pullPolicy: IfNotPresent
 # Resource configuration
 resources:
