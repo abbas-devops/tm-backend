@@ -11,4 +11,4 @@ exec java \
   ${JAVA_OPTS} \
   -jar app.jar
 
-# using this comment to test the CI/CD pipeline, v1.0.1
+# using this comment to test the CI/CD pipeline, v1.0.0
