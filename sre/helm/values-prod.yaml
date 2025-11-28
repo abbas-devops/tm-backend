@@ -69,10 +69,10 @@ probes:
     httpGet:
       path: /actuator/health
       port: 8080
-    initialDelaySeconds: 45
+    initialDelaySeconds: 60
     periodSeconds: 10
     timeoutSeconds: 3
-    failureThreshold: 30
+    failureThreshold: 10
 # Service configuration
 service:
   type: ClusterIP
