@@ -153,7 +153,12 @@ That's it! The application is now running with full observability.
 
 ### Using the Makefile for local testing
 
+The Makefile is located in the `sre/` directory for since this is a mono-repo with multiple projects.
+
 ```bash
+# Navigate to sre directory
+cd sre
+
 # Show all available commands
 make help
 
