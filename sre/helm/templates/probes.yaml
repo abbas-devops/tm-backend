@@ -1,0 +1,34 @@
+{{- if and .Values.sla_probe.enabled .Values.ingress_private.enabled }}
+{{- $probeName := printf "%s-health" .Values.appName }}
+{{- $healthUrl := printf "https://%s%s" .Values.ingress_private.host .Values.sla_probe.path }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: {{ $probeName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+    app.kubernetes.io/component: sla-probe
+    probe.monitoring/type: health
+    release: prometheus  # Required for Prometheus Operator to discover this probe
+spec:
+  prober:
+    url: blackbox-exporter-prometheus-blackbox-exporter.monitoring.svc.cluster.local:9115
+    path: /probe
+  module: https_2xx
+  targets:
+    staticConfig:
+      static:
+        - {{ $healthUrl | quote }}
+      labels:
+        service_name: {{ .Values.appName | quote }}
+        service_tier: {{ .Values.monitoring.serviceTier | default "backend" | quote }}
+        service_team: {{ .Values.monitoring.team | default "devops" | quote }}
+        environment: {{ .Values.monitoring.environment | default "production" | quote }}
+        endpoint_type: "health"
+        sla_target: {{ .Values.sla_probe.slaTarget | quote }}
+  interval: 15s
+  scrapeTimeout: 10s
+{{- end }}
+

@@ -1,0 +1,89 @@
+{{- if and .Values.iam .Values.iam.enabled (include "common.aws.oidcProvider" .) }}
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Role
+metadata:
+  name: {{ .Values.appName }}-role
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+spec:
+  name: {{ .Values.appName }}-role
+  assumeRolePolicyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Principal": {
+            "Federated": "arn:aws:iam::{{ include "common.aws.accountId" . }}:oidc-provider/{{ include "common.aws.oidcProvider" . }}"
+          },
+          "Action": "sts:AssumeRoleWithWebIdentity",
+          "Condition": {
+            "StringEquals": {
+              "{{ include "common.aws.oidcProvider" . }}:sub": "system:serviceaccount:{{ .Release.Namespace }}:{{ .Values.appName }}"
+            }
+          }
+        }
+      ]
+    }
+  policyRefs:
+    - from:
+        name: {{ .Values.appName }}-policy
+    {{- if and .Values.iam .Values.iam.additionalPolicies }}
+    {{- range .Values.iam.additionalPolicies }}
+    - from:
+        name: {{ $.Values.appName }}-{{ .name | lower }}-policy
+    {{- end }}
+    {{- end }}
+
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Policy
+metadata:
+  name: {{ .Values.appName }}-policy
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+spec:
+  name: {{ .Values.appName }}-policy
+  policyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "secretsmanager:GetSecretValue",
+            "secretsmanager:DescribeSecret"
+          ],
+          "Resource": [
+            "arn:aws:secretsmanager:{{ include "common.aws.region" . }}:{{ include "common.aws.accountId" . }}:secret:developers/{{ .Values.appName }}-*"
+          ]
+        }
+      ]
+    }
+
+{{- if and .Values.iam .Values.iam.additionalPolicies }}
+{{- range .Values.iam.additionalPolicies }}
+---
+apiVersion: iam.services.k8s.aws/v1alpha1
+kind: Policy
+metadata:
+  name: {{ $.Values.appName }}-{{ .name | lower }}-policy
+  labels:
+    {{- include "common.labels" $ | nindent 4 }}
+spec:
+  name: {{ $.Values.appName }}-{{ .name | lower }}-policy
+  policyDocument: |
+    {
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": {{ .actions | toJson }},
+          "Resource": {{ .resources | toJson }}
+        }
+      ]
+    }
+{{- end }}
+{{- end }}
+{{- end }}
+

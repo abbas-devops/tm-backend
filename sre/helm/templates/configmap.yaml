@@ -1,0 +1,20 @@
+{{- if or .Values.config (and .Values.jvmConfig .Values.jvmConfig.enabled) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "common.fullname" . }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+data:
+  {{- if .Values.config }}
+  {{- toYaml .Values.config | nindent 2 }}
+  {{- end }}
+  {{- if and .Values.jvmConfig .Values.jvmConfig.enabled }}
+  JVM_MAX_RAM_PERCENTAGE: {{ .Values.jvmConfig.maxRamPercentage | quote }}
+  JVM_MAX_GC_PAUSE_MS: {{ .Values.jvmConfig.maxGcPauseMs | quote }}
+  {{- if .Values.jvmConfig.additionalOpts }}
+  JAVA_OPTS: {{ .Values.jvmConfig.additionalOpts | quote }}
+  {{- end }}
+  {{- end }}
+{{- end }}
+

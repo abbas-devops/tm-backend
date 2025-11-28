@@ -1,0 +1,91 @@
+# Since we use AWS Split-view dns, public/private hosted zones, based on app/user preferences, we can enable either or both.
+
+{{- if .Values.ingress_public.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.appName }}-public
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    # ALB Configuration
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    {{- if include "common.aws.albCertificateArn" . }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ include "common.aws.albCertificateArn" . }}
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    {{- else }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    {{- end }}
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '15'
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress_public.host }}
+    external-dns.alpha.kubernetes.io/aws-zone-type: public    
+    
+    # Custom annotations from values
+    {{- range $key, $value := .Values.ingress_public.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  rules:
+    - host: {{ .Values.ingress_public.host }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Values.appName }}
+                port:
+                  number: {{ .Values.service.port | default 80 }}
+{{- end }}
+{{- if .Values.ingress_private.enabled }}
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.appName }}-private
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+  annotations:
+    # ALB Configuration
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+    {{- if include "common.aws.albCertificateArn" . }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ include "common.aws.albCertificateArn" . }}
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    {{- else }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    {{- end }}
+    alb.ingress.kubernetes.io/healthcheck-path: /actuator/health
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: '15'
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+    alb.ingress.kubernetes.io/ssl-policy: ELBSecurityPolicy-TLS13-1-2-2021-06
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.ingress_private.host }}
+    external-dns.alpha.kubernetes.io/aws-zone-type: private    
+    
+    # Custom annotations from values
+    {{- range $key, $value := .Values.ingress_private.annotations }}
+    {{ $key }}: {{ $value | quote }}
+    {{- end }}
+spec:
+  rules:
+    - host: {{ .Values.ingress_private.host }}
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: {{ .Values.appName }}
+                port:
+                  number: {{ .Values.service.port | default 80 }}
+{{- end }}

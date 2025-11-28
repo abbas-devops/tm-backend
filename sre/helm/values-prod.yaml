@@ -1,0 +1,200 @@
+# Default values for interview-backend
+
+# ArgoCD applicationset requirements to use selector labels for the app
+appName: interview
+description: Interview Backend Spring Boot Application
+status: running # running, stopped
+# AWS Configuration (this is my ephemeral cluster for the demo purpose)
+aws:
+  accountId: "125709657516" # AWS account ID
+  region: us-east-2 # AWS region
+  eksName: prod-eks # EKS cluster name
+  albCertificateArn: "arn:aws:acm:us-east-2:125709657516:certificate/0e4f3819-e6c2-41c4-8d63-b0b16f4cb712" # cert ARN for ALB HTTPS
+  oidcProvider: "oidc.eks.us-east-2.amazonaws.com/id/C854D1937320EE400CB1951A1EA5DAEF" # Set this for IRSA
+# Image configuration
+image:
+  repository: interview # ECR repository name
+  tag: prod-3498d60-6d89
+  pullPolicy: IfNotPresent
+# Resource configuration
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+# Replica configuration
+replicaCount: 2
+# Autoscaling configuration
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: 80
+# pulled from AWS Secrets Manager using SecretProviderClass
+envVars:
+  - JVM_MAX_RAM_PERCENTAGE # Heap size as % of container memory (default: 75 in Dockerfile)
+  - JVM_MAX_GC_PAUSE_MS # Target max GC pause time in ms (default: 200 in Dockerfile)
+  - JAVA_OPTS # Additional JVM options (optional)
+# if you don't want to use AWS Secrets Manager, you can use this configuration to use a configmap for JVM tuning parameters
+jvmConfig:
+  enabled: false
+  # Heap size as percentage of container memory (default: 75 in Dockerfile)
+  maxRamPercentage: "75"
+  # Target max GC pause time in milliseconds (default: 200 in Dockerfile)
+  maxGcPauseMs: "200"
+  # Additional JVM options (optional)
+  additionalOpts: ""
+# Health check probes
+probes:
+  liveness:
+    httpGet:
+      path: /actuator/health
+      port: 8080
+    initialDelaySeconds: 45
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    httpGet:
+      path: /actuator/health
+      port: 8080
+    initialDelaySeconds: 45
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  startup:
+    httpGet:
+      path: /actuator/health
+      port: 8080
+    initialDelaySeconds: 45
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 30
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+# Ingress configuration (AWS ALB)
+ingress_public:
+  enabled: false # enable if you want to expose the application to the public internet
+  host: interview.abbas.website
+  annotations: {}
+  # Add custom ALB annotations as needed like idle timeout, etc.
+  # alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=3600
+ingress_private:
+  enabled: true # now this backend can be accessed only from the internal network
+  host: interview.abbas.website
+  annotations: {}
+# Monitoring configuration
+monitoring:
+  environment: production
+  serviceTier: backend
+  team: sre
+  # ServiceMonitor for Prometheus metrics scraping
+  serviceMonitor:
+    enabled: true
+    port: "http"
+    path: "/actuator/prometheus"
+    interval: "30s"
+    scrapeTimeout: "10s"
+    honorLabels: true
+    additionalLabels: {}
+    annotations: {}
+    relabelings: []
+    metricRelabelings: []
+# SLA probe configuration (Blackbox Exporter for health endpoint monitoring :)
+sla_probe:
+  enabled: true
+  path: "/actuator/health"
+  slaTarget: "99.5"
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+# Security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+# Node selector for pod scheduling
+nodeSelector:
+  kubernetes.io/arch: amd64 # because i'm using amd64 nodes for the demo cluster
+# Affinity rules
+# affinity:
+#   podAntiAffinity:
+#     preferredDuringSchedulingIgnoredDuringExecution:
+#       - weight: 100
+#         podAffinityTerm:
+#           labelSelector:
+#             matchExpressions:
+#               - key: app
+#                 operator: In
+#                 values:
+#                   - interview-backend
+#           topologyKey: kubernetes.io/hostname
+
+# Tolerations (use if you have tainted nodes)
+# tolerations:
+#   - key: "workload-type"
+#     operator: "Equal"
+#     value: "backend"
+#     effect: "NoSchedule"
+
+# OpenTelemetry Configuration (auto-instrumentation)
+otel:
+  enabled: true
+  instrumentationName: "interview-backend-instrumentation"
+  endpoint: "http://opentelemetry-collector.monitoring.svc.cluster.local:4317"
+  propagators:
+    - "tracecontext"
+    - "baggage"
+    - "b3"
+    - "jaeger"
+  sampler:
+    type: "parentbased_traceidratio"
+    argument: "1" # 100% sampling for demo but probably gonna use 0.1 for production
+  # Java auto-instrumentation (enabled for Spring Boot)
+  java:
+    enabled: true
+    env:
+      # Force gRPC protocol (not HTTP)
+      - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: "grpc"
+# Pod annotations for OpenTelemetry injection
+podAnnotations:
+  instrumentation.opentelemetry.io/inject-java: "true"
+  # Reloader annotation (requires Stakater Reloader operator)
+  reloader.stakater.com/auto: "true" # if you update aws secrets manager, it will automatically restart the pod with the new secrets so yea no manual restarts :)
+# IAM configuration for IRSA
+iam:
+  enabled: true
+  # Additional IAM policies can be added here
+  # Example:
+  # additionalPolicies:
+  #   - name: "S3"
+  #     actions: ["s3:GetObject", "s3:PutObject"]
+  #     resources: ["arn:aws:s3:::my-bucket/*"]
+  additionalPolicies: []
+# Revision history limit (keep only 1 old ReplicaSet)
+revisionHistoryLimit: 1
+# Network Policy (optional)
+# networkPolicy:
+#   enabled: false
+#   policyTypes:
+#     - Ingress
+#   ingress:
+#     - from:
+#         - podSelector: {}
+#       ports:
+#         - protocol: TCP
+#           port: 8080

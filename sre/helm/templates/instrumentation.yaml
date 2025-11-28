@@ -1,0 +1,61 @@
+{{- if .Values.otel.enabled }}
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: {{ .Values.otel.instrumentationName | default "interview-backend-instrumentation" }}
+  labels:
+    {{- include "common.labels" . | nindent 4 }}
+spec:
+  exporter:
+    endpoint: {{ .Values.otel.endpoint | default "http://opentelemetry-collector.monitoring.svc.cluster.local:4318" }}
+  propagators:
+    {{- if .Values.otel.propagators }}
+    {{- range .Values.otel.propagators }}
+    - {{ . }}
+    {{- end }}
+    {{- else }}
+    - tracecontext
+    - baggage
+    - b3
+    - jaeger
+    {{- end }}
+  sampler:
+    {{- if .Values.otel.sampler }}
+    type: {{ .Values.otel.sampler.type | default "parentbased_traceidratio" }}
+    argument: {{ .Values.otel.sampler.argument | default "1" | quote }}
+    {{- else }}
+    type: parentbased_traceidratio
+    argument: "1"
+    {{- end }}
+  {{- if and .Values.otel.java .Values.otel.java.enabled }}
+  java:
+    {{- if .Values.otel.java.image }}
+    image: {{ .Values.otel.java.image }}
+    {{- end }}
+    {{- if .Values.otel.java.env }}
+    env:
+      {{- toYaml .Values.otel.java.env | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- if and .Values.otel.python .Values.otel.python.enabled }}
+  python:
+    {{- if .Values.otel.python.image }}
+    image: {{ .Values.otel.python.image }}
+    {{- end }}
+    {{- if .Values.otel.python.env }}
+    env:
+      {{- toYaml .Values.otel.python.env | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- if and .Values.otel.nodejs .Values.otel.nodejs.enabled }}
+  nodejs:
+    {{- if .Values.otel.nodejs.image }}
+    image: {{ .Values.otel.nodejs.image }}
+    {{- end }}
+    {{- if .Values.otel.nodejs.env }}
+    env:
+      {{- toYaml .Values.otel.nodejs.env | nindent 6 }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+

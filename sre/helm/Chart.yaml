@@ -1,0 +1,16 @@
+apiVersion: v2
+name: interview
+description: Helm chart for Interview Backend Spring Boot Application
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - spring-boot
+  - backend
+  - interview
+maintainers:
+  - name: SRE Team
+    email: sre@tekmetric.com
+sources:
+  - https://github.com/Tekmetric/interview
+
