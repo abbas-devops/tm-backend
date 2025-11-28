@@ -1,0 +1,178 @@
+name: Backend CI/CD Pipeline
+
+# this workflows is a simple example of triggering a CI/CD pipeline when code is pushed to the main branch
+# The flow could for an actual environment would be more comprehensive and include more steps and checks.
+# Additionally, the triggers could be set on various events like pull requests, tags, branches, etc.
+# There could be another adhoc workflow for manual deployment to dev,staging,prod environments etc. 
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+
+permissions:
+  contents: read
+  id-token: write
+  checks: write
+
+env:
+  AWS_REGION: us-east-2
+  AWS_ACCOUNT_ID: "125709657516"
+  ECR_REPOSITORY: interview
+  ARGOCD_VALUES_FILE: sre/helm/values-prod.yaml
+
+jobs:
+  pre-build:
+    name: Pre-Build
+    runs-on: ubuntu-latest
+    outputs:
+      short_sha: ${{ steps.sha.outputs.short_sha }}
+      image_tag: ${{ steps.tags.outputs.image_tag }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: 'maven'
+      
+      - name: Build with Maven
+        working-directory: ./backend
+        run: mvn clean package -B
+      
+      - name: Get short SHA
+        id: sha
+        run: echo "short_sha=$(git rev-parse --short=7 HEAD)" >> $GITHUB_OUTPUT
+      
+      - name: Set image tags
+        id: tags
+        run: |
+          RANDOM_SUFFIX=$(openssl rand -hex 2)
+          echo "image_tag=prod-${{ steps.sha.outputs.short_sha }}-${RANDOM_SUFFIX}" >> $GITHUB_OUTPUT
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: backend/target/*.jar
+          retention-days: 1
+          compression-level: 0
+
+  build-and-push:
+    name: Build and Push to ECR
+    needs: pre-build
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ needs.pre-build.outputs.image_tag }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      
+      - name: Restore build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: backend/target
+      
+      - name: Check artifacts
+        run: |
+          ARTIFACT_PATH="backend/target"
+          if [ ! -d "$ARTIFACT_PATH" ] || [ -z "$(ls -A $ARTIFACT_PATH)" ]; then
+            echo "No build artifacts found in $ARTIFACT_PATH!"
+            exit 1
+          fi
+          echo "Found build artifacts:"
+          ls -la "$ARTIFACT_PATH"
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5.1.1
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/prod-${{ env.AWS_REGION }}-ga-${{ env.ECR_REPOSITORY }}-role
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      
+      - name: Build and Push Image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ needs.pre-build.outputs.image_tag }}
+        run: |
+          export DOCKER_BUILDKIT=1
+          docker buildx create --use
+          docker buildx build \
+            --platform linux/amd64 \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            --tag $ECR_REGISTRY/$ECR_REPOSITORY:prod-latest \
+            --cache-from type=registry,ref=$ECR_REGISTRY/$ECR_REPOSITORY:prod-latest \
+            --cache-to type=inline \
+            --push \
+            ./backend
+
+  deploy:
+    name: Update ArgoCD Repository
+    needs: [pre-build, build-and-push]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      
+      - name: Install yq
+        uses: mikefarah/yq@v4.49.2
+      
+      - name: Update Image Tag in Values File
+        run: |
+          # Update image tag using yq (preserves comments and formatting)
+          yq eval '.image.tag = "${{ needs.pre-build.outputs.image_tag }}"' -i ${{ env.ARGOCD_VALUES_FILE }}
+          
+          # Verify the change
+          echo "Updated image tag to: $(yq eval '.image.tag' ${{ env.ARGOCD_VALUES_FILE }})"
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          commit-message: 'update interview-backend image tag to ${{ needs.pre-build.outputs.image_tag }}'
+          committer: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          author: github-actions[bot] <github-actions[bot]@users.noreply.github.com>
+          branch: interview-backend-${{ github.ref_name }}-${{ github.run_id }}
+          delete-branch: true
+          title: 'Update interview-backend image tag to ${{ needs.pre-build.outputs.image_tag }}'
+          body: |
+            ## 🚀 Automated Image Tag Update
+            
+            **Service:** interview-backend
+            **New Image Tag:** `${{ needs.pre-build.outputs.image_tag }}`
+            **Triggered by:** @${{ github.actor }}
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** ${{ github.sha }}
+            
+            ### Changes
+            - Updated `image.tag` in `${{ env.ARGOCD_VALUES_FILE }}`
+            
+            ### Deployment
+            Once merged, ArgoCD will automatically sync and deploy this change to the EKS cluster.
+            
+            ---
+            *This PR was automatically created by the [Backend CI/CD Pipeline](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})*
+          labels: |
+            production
+            interview-backend
+            automated-deployment
+          draft: false
+
