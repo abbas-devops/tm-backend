@@ -188,13 +188,13 @@ iam:
 # Revision history limit (keep only 1 old ReplicaSet)
 revisionHistoryLimit: 1
 # Network Policy (optional)
-# networkPolicy:
-#   enabled: false
-#   policyTypes:
-#     - Ingress
-#   ingress:
-#     - from:
-#         - podSelector: {}
-#       ports:
-#         - protocol: TCP
-#           port: 8080
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8080
