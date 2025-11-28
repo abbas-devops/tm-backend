@@ -1,13 +1,13 @@
 name: Backend CI/CD Pipeline
 
-# this workflows is a simple example of triggering a CI/CD pipeline when code is pushed to the main branch
+# this workflows is a simple example of triggering a CI/CD pipeline when code is pushed to the master branch
 # The flow could for an actual environment would be more comprehensive and include more steps and checks.
 # Additionally, the triggers could be set on various events like pull requests, tags, branches, etc.
 # There could be another adhoc workflow for manual deployment to dev,staging,prod environments etc. 
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
     paths:
       - 'backend/**'
 
