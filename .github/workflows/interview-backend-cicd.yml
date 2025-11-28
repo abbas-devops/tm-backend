@@ -97,7 +97,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v5.1.1
         with:
-          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/prod-${{ env.AWS_REGION }}-ga-${{ env.ECR_REPOSITORY }}-role
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/prod-${{ env.AWS_REGION }}-ga-tm-backend-role
           aws-region: ${{ env.AWS_REGION }}
           mask-aws-account-id: true
       
