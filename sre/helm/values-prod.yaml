@@ -9,8 +9,8 @@ aws:
   accountId: "125709657516" # AWS account ID
   region: us-east-2 # AWS region
   eksName: prod-eks # EKS cluster name
-  albCertificateArn: "arn:aws:acm:us-east-2:125709657516:certificate/0e4f3819-e6c2-41c4-8d63-b0b16f4cb712" # cert ARN for ALB HTTPS
-  oidcProvider: "oidc.eks.us-east-2.amazonaws.com/id/C854D1937320EE400CB1951A1EA5DAEF" # Set this for IRSA
+  albCertificateArn: "arn:aws:acm:us-east-2:125709657516:certificate/7528b3ca-dd61-420c-986a-910e2e2c6ed8" # cert ARN for ALB HTTPS
+  oidcProvider: "oidc.eks.us-east-2.amazonaws.com/id/A4B8628291B210FA686142A0A99D9B8A" # Set this for IRSA
 # Image configuration
 image:
   repository: interview # ECR repository name
